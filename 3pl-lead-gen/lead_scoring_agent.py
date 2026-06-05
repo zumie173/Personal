@@ -195,8 +195,35 @@ def fetch_dataset(dataset_id, cat_name, max_items=100):
         return []
 
 def scrape_categories():
-    """Read all 4 static datasets. No actor runs — completely free."""
-    print(f"  Reading {len(STATIC_DATASETS)} Apify datasets (free)...")
+    """
+    Load lead data. Priority order:
+      1. input_data.json dropped in the output folder (manual Apify download)
+      2. STATIC_DATASETS list (Apify dataset IDs)
+    """
+    # Option 1: local JSON file dropped by user
+    local_file = OUTPUT_ROOT / "input_data.json"
+    if local_file.exists():
+        print(f"  Loading from local file: {local_file}")
+        try:
+            with open(local_file, encoding="utf-8") as f:
+                items = json.load(f)
+            if not isinstance(items, list):
+                items = items.get("items", items.get("results", []))
+            for item in items:
+                if not item.get("_category"):
+                    item["_category"] = "Shopify Store"
+            print(f"  Total raw items: {len(items)}")
+            return items
+        except Exception as e:
+            print(f"  Warning reading input_data.json: {e}")
+
+    # Option 2: fetch from Apify dataset IDs
+    if not STATIC_DATASETS:
+        print("  WARNING: No datasets configured and no input_data.json found.")
+        print(f"  Drop your Apify JSON export as: {local_file}")
+        return []
+
+    print(f"  Reading {len(STATIC_DATASETS)} Apify datasets...")
     all_items = []
     for ds in STATIC_DATASETS:
         items = fetch_dataset(ds["dataset_id"], ds["category"])
@@ -300,11 +327,22 @@ def _derive_brand_name(item):
     name = (item.get("name") or item.get("title") or item.get("storeName") or "").strip()
     if name:
         return name
+    # WebDataLabs: derive from store_domain (e.g. "twosome-project.com" → "Twosome Project")
+    domain = (item.get("store_domain") or "").strip()
+    if domain:
+        base = domain.replace("https://","").replace("http://","").split("/")[0]
+        parts = base.split(".")
+        # Handle subdomains like store.kice.com → use the brand part
+        if len(parts) >= 2 and parts[0].lower() in ("store","shop","www"):
+            base = parts[1]
+        else:
+            base = parts[0]
+        return base.replace("-"," ").replace("_"," ").title().strip()
     shop = (item.get("shop_name") or "").replace(".myshopify.com", "").strip()
     if shop:
         return shop.replace("-", " ").title()
-    domain = (item.get("store_domain") or item.get("store_url") or "").replace("https://","").replace("http://","").split("/")[0]
-    return domain.replace("-"," ").replace("."," ").title().strip()
+    fallback = (item.get("store_url") or "").replace("https://","").replace("http://","").split("/")[0]
+    return fallback.replace("-"," ").replace("."," ").title().strip() or "Unknown"
 
 def extract_lead(item, category):
     addr    = item.get("address") or {}
@@ -315,32 +353,39 @@ def extract_lead(item, category):
     state = (addr.get("zone") or addr.get("state") or item.get("zone") or item.get("state") or "").strip()
     city  = (addr.get("city") or item.get("city") or "").strip()
 
-    wdl_reviews = 0
+    # WebDataLabs uses total_estimated_sales as volume proxy; fall back to review fields
+    estimated_sales = si(item.get("total_estimated_sales") or 0)
     avg_rpp = sf(item.get("avg_reviews_per_product") or 0)
     n_prods = si(item.get("total_products") or 0)
-    if avg_rpp and n_prods:
-        wdl_reviews = int(avg_rpp * n_prods)
-    reviews = si(item.get("totalProductReviews") or item.get("reviewCount") or item.get("reviews") or 0) or wdl_reviews
+    wdl_reviews = int(avg_rpp * n_prods) if avg_rpp and n_prods else 0
+    reviews = si(item.get("totalProductReviews") or item.get("reviewCount") or item.get("reviews") or 0)
+    reviews = reviews or wdl_reviews or estimated_sales
 
-    rating = sf(item.get("rating") or item.get("averageRating") or item.get("averageProductRating")
-                or item.get("avg_rating") or 0)
+    rating = sf(item.get("avg_rating") or item.get("rating") or item.get("averageRating")
+                or item.get("averageProductRating") or 0)
 
-    product_price, product_title = 0.0, ""
+    # WebDataLabs provides price_avg directly; also check sample product lists
+    product_price = sf(item.get("price_avg") or item.get("price_min") or 0)
+    product_title = ""
     sample = item.get("top_products") or item.get("sampleProducts") or item.get("products") or []
     if isinstance(sample, list) and sample:
         first = sample[0] if isinstance(sample[0], dict) else {}
-        product_price = sf(first.get("price") or first.get("priceMin") or 0)
+        product_price = sf(first.get("price") or first.get("priceMin") or 0) or product_price
         product_title = (first.get("title") or first.get("name") or "").strip()
-    if not product_price:
-        product_price = sf(item.get("price_avg") or item.get("price_min") or 0)
 
     email, phone, contact_url = extract_contacts(item)
-    if not contact_url:
-        contact_url = (item.get("store_url") or "").strip()
 
+    # Build full URL from store_domain if needed
+    raw_domain = (item.get("store_domain") or "").strip()
+    if raw_domain and not raw_domain.startswith("http"):
+        raw_domain = "https://" + raw_domain
     website = (item.get("websiteUrl") or item.get("website") or item.get("url")
-               or item.get("store_url") or item.get("store_domain") or "").strip()
-    myshopify = (item.get("myshopifyDomain") or item.get("shop_name") or "").strip()
+               or item.get("store_url") or raw_domain or "").strip()
+    if not contact_url:
+        contact_url = website
+
+    myshopify = (item.get("myshopifyDomain") or item.get("shop_name")
+                 or item.get("store_domain") or "").strip()
 
     return {
         "name":            _derive_brand_name(item),
