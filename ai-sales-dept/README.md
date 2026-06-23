@@ -48,17 +48,21 @@ cp .env.example .env
 
 ## Running the Pipeline
 
-### Dry run (no Apify, uses sample leads — test your setup first)
+### Import from Apollo CSV (recommended first run)
+```bash
+# Run the full pipeline on an Apollo export
+python pipeline.py --import-file data/sample_leads.csv
+
+# Or use the standalone import script
+python scripts/import_apollo.py data/sample_leads.csv --run-pipeline
+```
+
+### Dry run (built-in synthetic leads — no credentials needed except Anthropic + Sheets)
 ```bash
 python pipeline.py --dry-run
 ```
 
-### Full run with defaults
-```bash
-python pipeline.py
-```
-
-### Custom queries and result count
+### Full Shopify scrape via Apify
 ```bash
 python pipeline.py --queries "subscription box" "book publisher" --max 150
 ```

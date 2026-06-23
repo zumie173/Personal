@@ -23,12 +23,25 @@ TAB_PIPELINE_LOG = "Pipeline Log"
 
 # Column headers for the Leads tab (order matters — maps to row writes)
 LEADS_HEADERS = [
-    "ID", "Company Name", "Website", "Email", "Phone",
+    # Identity
+    "ID", "Company Name", "Website", "Domain", "Platform",
+    # Contact person
+    "Contact Name", "Contact Title", "Contact LinkedIn",
+    # Company contact
+    "Email", "Phone",
+    # Social
     "Instagram", "Facebook", "TikTok", "Twitter",
-    "Product Count", "Platform", "Status",
+    # Company intelligence
+    "Industry", "Employee Count", "Tech Stack",
+    "Company City", "Company State",
+    # Product / pipeline
+    "Product Count", "Status",
+    # Scores
     "Quality Score", "Quality Flags",
     "ICP Score", "Confidence Score", "Category",
-    "Score Rationale", "Created At",
+    "Score Rationale",
+    # Meta
+    "Source", "Created At",
 ]
 
 
@@ -106,25 +119,46 @@ class SheetsClient:
 
 
 def _lead_to_row(lead: dict) -> list:
+    contact_name = " ".join(filter(None, [
+        lead.get("contact_first_name"), lead.get("contact_last_name")
+    ]))
     return [
+        # Identity
         lead.get("id", ""),
         lead.get("company_name", ""),
         lead.get("website", ""),
+        lead.get("domain", ""),
+        lead.get("platform_source", ""),
+        # Contact person
+        contact_name,
+        lead.get("contact_title", ""),
+        lead.get("contact_linkedin_url", ""),
+        # Company contact
         lead.get("email", ""),
         lead.get("phone", ""),
+        # Social
         lead.get("instagram_url", ""),
         lead.get("facebook_url", ""),
         lead.get("tiktok_url", ""),
         lead.get("twitter_url", ""),
+        # Company intelligence
+        lead.get("industry", ""),
+        lead.get("employee_count", ""),
+        lead.get("tech_stack", ""),
+        lead.get("company_city", ""),
+        lead.get("company_state", ""),
+        # Product / pipeline
         lead.get("product_count", ""),
-        lead.get("platform_source", "shopify"),
         lead.get("status", ""),
+        # Scores
         lead.get("quality_score", ""),
         lead.get("quality_flags", ""),
         lead.get("icp_score", ""),
         lead.get("confidence_score", ""),
         lead.get("lead_category", ""),
         lead.get("score_rationale", ""),
+        # Meta
+        lead.get("platform_source", ""),
         lead.get("created_at", ""),
     ]
 

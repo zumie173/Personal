@@ -115,18 +115,29 @@ class LeadQualifierAgent(BaseAgent):
         lines = [
             f"Company: {lead.get('company_name', 'Unknown')}",
             f"Website: {lead.get('website', 'Unknown')}",
-            f"Platform: {lead.get('platform_source', 'shopify')}",
-            f"Product count: {lead.get('product_count', 'unknown')}",
+            f"Platform: {lead.get('platform_source', 'unknown')}",
+            f"Industry: {lead.get('industry', 'unknown')}",
+            f"Product count (SKUs): {lead.get('product_count', 'unknown')}",
+            f"Employee count: {lead.get('employee_count', 'unknown')}",
+            f"Company location: {lead.get('company_city', '')} {lead.get('company_state', '')} {lead.get('company_country', '')}".strip(),
             f"Email present: {'yes' if lead.get('email') else 'no'}",
-            f"Social links: " + ", ".join(
+            f"Social links: " + (", ".join(
                 k.replace("_url", "") for k in
                 ("instagram_url", "facebook_url", "tiktok_url", "twitter_url")
                 if lead.get(k)
-            ) or "none",
+            ) or "none"),
             f"Data quality score: {lead.get('quality_score', 'unknown')}/100",
         ]
+        if lead.get("keywords"):
+            # Trim keywords to first 200 chars to keep prompt concise
+            kw = lead["keywords"][:200]
+            lines.append(f"Business keywords: {kw}...")
+        if lead.get("tech_stack"):
+            lines.append(f"Tech stack: {lead['tech_stack'][:150]}")
         if lead.get("quality_flags"):
             lines.append(f"Quality flags: {lead['quality_flags']}")
+        if lead.get("funding_stage"):
+            lines.append(f"Funding: {lead.get('funding_stage')} (${lead.get('funding_amount', 'unknown'):,})" if lead.get("funding_amount") else f"Funding: {lead.get('funding_stage')}")
         return "\n".join(lines)
 
     @staticmethod

@@ -49,7 +49,9 @@ def parse_args():
     parser.add_argument("--max", type=int, default=settings.default_max_results,
                         help="Max results from Apify")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Use sample data instead of calling Apify")
+                        help="Use built-in sample data instead of calling Apify")
+    parser.add_argument("--import-file", metavar="CSV",
+                        help="Import leads from an Apollo CSV export (skips scraper)")
     return parser.parse_args()
 
 
@@ -136,7 +138,59 @@ def main():
     # Initialize DB schema on first run
     database.init_schema()
 
-    if args.dry_run:
+    if args.import_file:
+        logger.info("IMPORT MODE — loading leads from %s", args.import_file)
+        from scripts.import_apollo import import_file
+        from agents.duplicate_detection import DuplicateDetectionAgent
+        from agents.data_quality import DataQualityAgent
+        from agents.lead_qualifier import LeadQualifierAgent
+        from agents.crm_agent import CRMAgent
+        from datetime import datetime, timezone
+
+        raw_ids = import_file(args.import_file)
+        if not raw_ids:
+            logger.error("No leads imported. Check the file format.")
+            sys.exit(1)
+
+        run_id = database.create_run()
+        deduped = DuplicateDetectionAgent(settings, run_id).run(raw_ids)
+        quality = DataQualityAgent(settings, run_id).run(deduped)
+        scored = LeadQualifierAgent(settings, run_id).run(quality)
+
+        crm = CRMAgent(settings, run_id)
+        crm.setup()
+        counts = crm.run(scored)
+
+        stats = {
+            "leads_scraped": len(raw_ids),
+            "leads_duped": len(raw_ids) - len(deduped),
+            "leads_rejected": len(deduped) - len(quality),
+            "leads_qualified": len(scored),
+            **{f"{k}_count": v for k, v in counts.items()},
+        }
+        database.update_run(run_id, {
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "status": "complete",
+            **stats,
+        })
+        run = database.get_run(run_id)
+        crm.log_run(run)
+
+        print(f"""
+╔═══════════════════════════════════════════╗
+║      TFH IMPORT PIPELINE COMPLETE        ║
+╠═══════════════════════════════════════════╣
+║  Imported:    {len(raw_ids):>4}                          ║
+║  Duplicates:  {stats['leads_duped']:>4}                          ║
+║  Rejected:    {stats['leads_rejected']:>4}                          ║
+║  Qualified:   {len(scored):>4}                          ║
+╠═══════════════════════════════════════════╣
+║  🔥 Hot:      {counts.get('hot', 0):>4}                          ║
+║  🟡 Warm:     {counts.get('warm', 0):>4}                          ║
+║  🔵 Cold:     {counts.get('cold', 0):>4}                          ║
+╚═══════════════════════════════════════════╝
+""")
+    elif args.dry_run:
         logger.info("DRY RUN MODE — using sample leads, no Apify call")
         # In dry-run, bypass the scraper and inject sample data directly
         run_id = database.create_run()

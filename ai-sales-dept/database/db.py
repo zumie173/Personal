@@ -43,11 +43,31 @@ def init_schema():
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS leads (
                 id              TEXT PRIMARY KEY,
+                -- Company fields
                 company_name    TEXT,
                 website         TEXT,
                 domain          TEXT,
                 email           TEXT,
                 phone           TEXT,
+                -- Contact person fields (populated from Apollo / Contact Discovery)
+                contact_first_name  TEXT,
+                contact_last_name   TEXT,
+                contact_title       TEXT,
+                contact_linkedin_url TEXT,
+                contact_seniority   TEXT,
+                contact_department  TEXT,
+                -- Company intelligence (from Apollo / Research)
+                industry        TEXT,
+                keywords        TEXT,
+                company_city    TEXT,
+                company_state   TEXT,
+                company_country TEXT,
+                employee_count  INTEGER,
+                revenue_est     INTEGER,
+                funding_stage   TEXT,
+                funding_amount  INTEGER,
+                tech_stack      TEXT,
+                apollo_id       TEXT,
                 instagram_url   TEXT,
                 facebook_url    TEXT,
                 tiktok_url      TEXT,
