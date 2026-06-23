@@ -86,7 +86,8 @@ def init_schema():
                 is_duplicate    INTEGER DEFAULT 0,
                 duplicate_of_id TEXT,
                 quality_score   INTEGER,
-                quality_flags   TEXT,       -- JSON array
+                quality_flags   TEXT,
+                quality_reason  TEXT,       -- human-readable explanation of quality score
                 icp_score       INTEGER,
                 confidence_score INTEGER,
                 lead_category   TEXT,       -- hot|warm|cold

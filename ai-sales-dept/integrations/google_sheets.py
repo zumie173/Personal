@@ -38,9 +38,9 @@ LEADS_HEADERS = [
     "Product Count (SKUs)", "Avg Weight (oz)", "Avg Price", "Avg Rating", "Total Reviews",
     "Country", "Status",
     # Scores
-    "Quality Score", "Quality Flags",
+    "Quality Score", "Quality Reason",
     "ICP Score", "Confidence Score", "Category",
-    "Score Rationale",
+    "Reason",
     # Meta
     "Source", "Created At",
 ]
@@ -158,15 +158,90 @@ def _lead_to_row(lead: dict) -> list:
         lead.get("status", ""),
         # Scores
         lead.get("quality_score", ""),
-        lead.get("quality_flags", ""),
+        lead.get("quality_reason", ""),
         lead.get("icp_score", ""),
         lead.get("confidence_score", ""),
         lead.get("lead_category", ""),
-        lead.get("score_rationale", ""),
+        _build_reason(lead),
         # Meta
-        lead.get("platform_source", ""),
+        _source_label(lead.get("platform_source", "")),
         lead.get("created_at", ""),
     ]
+
+
+def _source_label(platform_source: str) -> str:
+    """Convert internal platform_source to human-readable Source column value."""
+    mapping = {
+        "shopify":        "Shopify",
+        "woocommerce":    "WooCommerce",
+        "tiktok_shop":    "TikTok",
+        "apollo_import":  "Apollo",
+        "apollo":         "Apollo",
+        "manual":         "Manual",
+    }
+    return mapping.get((platform_source or "").lower(), platform_source or "Unknown")
+
+
+def _build_reason(lead: dict) -> str:
+    """
+    Build a short human-readable Reason sentence from scored lead data.
+    Examples:
+      "3 SKUs, lightweight products (20 oz), US store, Shopify"
+      "129 SKUs, low price point ($20), US store, high review volume"
+      "Food manufacturing — not a 3PL fit"
+    """
+    parts = []
+
+    # SKU count
+    skus = lead.get("product_count")
+    if skus is not None:
+        parts.append(f"{skus} SKUs")
+
+    # Weight
+    oz = lead.get("avg_product_weight_oz")
+    if oz is not None:
+        lbs = round(float(oz) / 16, 1)
+        if lbs < 1:
+            parts.append(f"lightweight ({oz} oz)")
+        elif lbs <= 5:
+            parts.append(f"{lbs} lb avg weight")
+        else:
+            parts.append(f"heavy ({lbs} lbs avg — oversized risk)")
+
+    # Price
+    price = lead.get("avg_product_price")
+    if price is not None:
+        parts.append(f"${price:.0f} avg price")
+
+    # Reviews / volume proxy
+    reviews = lead.get("total_reviews")
+    if reviews:
+        if reviews > 10000:
+            parts.append("very high review volume")
+        elif reviews > 1000:
+            parts.append("strong review volume")
+        elif reviews > 100:
+            parts.append(f"{reviews} reviews")
+
+    # Country
+    country = lead.get("country_code") or lead.get("company_country", "")
+    if country:
+        parts.append(f"{country} store")
+
+    # Platform
+    source = _source_label(lead.get("platform_source", ""))
+    if source and source not in ("Unknown", ""):
+        parts.append(source)
+
+    # Fallback: use score rationale trimmed if nothing else
+    if not parts and lead.get("score_rationale"):
+        # Strip the breakdown prefix [vol:X ship:X ...] if present
+        rationale = lead["score_rationale"]
+        if rationale.startswith("["):
+            rationale = rationale.split("]", 1)[-1].strip()
+        return rationale[:120]
+
+    return ", ".join(parts) if parts else "Insufficient data"
 
 
 def _col_letter(n: int) -> str:
