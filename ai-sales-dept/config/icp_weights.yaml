@@ -1,0 +1,82 @@
+# ICP Scoring Weights — The Fulfillment House
+# Adjust these without touching agent code. Increment version on any change.
+# Learning Agent will propose updates here based on conversion data.
+
+version: "1.0.0"
+updated: "2026-06-23"
+
+# Final score formula:
+# final_score = (icp_score * icp_weight) + (confidence_score * confidence_weight) + (intent_score * intent_weight)
+final_score_weights:
+  icp: 0.40
+  confidence: 0.20
+  intent: 0.40
+
+# Lead category thresholds
+categories:
+  hot:  75   # >= 75 → Hot
+  warm: 40   # >= 40 → Warm (else Cold)
+
+# ICP sub-dimension weights (must sum to 1.0)
+icp_dimensions:
+  order_volume_fit:
+    weight: 0.25
+    description: "Monthly order volume 1,000–2,500 is ideal; 500–5,000 is secondary"
+    scoring:
+      ideal:     { min: 1000, max: 2500, score: 100 }
+      secondary: { min: 500,  max: 4999, score: 60  }
+      poor:      { score: 20 }
+
+  sku_count_fit:
+    weight: 0.20
+    description: "< 50 SKUs is ideal; < 200 is acceptable"
+    scoring:
+      ideal:     { max: 50,  score: 100 }
+      secondary: { max: 200, score: 60  }
+      poor:      { score: 10 }
+
+  product_category_fit:
+    weight: 0.20
+    description: "Books, merchandise, apparel, subscription are primary fits"
+    primary_categories:
+      - books
+      - merchandise
+      - apparel
+      - subscription
+      - gifts
+      - health_wellness
+    secondary_categories:
+      - pet_supplies
+      - beauty
+      - home_goods
+    scoring:
+      primary:   100
+      secondary: 60
+      other:     20
+
+  geography:
+    weight: 0.15
+    description: "US-based sellers are the target market"
+    scoring:
+      us: 100
+      ca: 50
+      other: 10
+
+  platform:
+    weight: 0.10
+    description: "Platform signals likelihood of being a small-mid ecommerce seller"
+    scoring:
+      shopify: 90
+      woocommerce: 85
+      tiktok_shop: 80
+      amazon: 50
+      other: 30
+
+  company_size:
+    weight: 0.10
+    description: "Not enterprise; ideally < 50 employees"
+    scoring:
+      micro:  { max: 10,   score: 100 }
+      small:  { max: 50,   score: 90  }
+      medium: { max: 200,  score: 50  }
+      large:  { score: 10 }
