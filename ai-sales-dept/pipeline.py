@@ -52,6 +52,8 @@ def parse_args():
                         help="Use built-in sample data instead of calling Apify")
     parser.add_argument("--import-file", metavar="CSV",
                         help="Import leads from an Apollo CSV export (skips scraper)")
+    parser.add_argument("--import-json", metavar="JSON",
+                        help="Import leads from an Apify JSON export (skips scraper)")
     return parser.parse_args()
 
 
@@ -138,7 +140,16 @@ def main():
     # Initialize DB schema on first run
     database.init_schema()
 
-    if args.import_file:
+    if args.import_json:
+        logger.info("APIFY JSON IMPORT — loading from %s", args.import_json)
+        from scripts.import_apify_json import import_json_file, run_pipeline as _run
+        raw_ids = import_json_file(args.import_json)
+        if raw_ids:
+            _run(raw_ids)
+        else:
+            logger.error("No leads imported.")
+            sys.exit(1)
+    elif args.import_file:
         logger.info("IMPORT MODE — loading leads from %s", args.import_file)
         from scripts.import_apollo import import_file
         from agents.duplicate_detection import DuplicateDetectionAgent

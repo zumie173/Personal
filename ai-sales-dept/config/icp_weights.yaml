@@ -1,82 +1,110 @@
 # ICP Scoring Weights — The Fulfillment House
-# Adjust these without touching agent code. Increment version on any change.
-# Learning Agent will propose updates here based on conversion data.
+# Operational-fit model. Industry is largely ignored — what matters is
+# how a product ships, not what category it's in.
+# Increment version on any change. Learning Agent will propose updates here.
 
-version: "1.0.0"
+version: "2.0.0"
 updated: "2026-06-23"
+note: "Rebuilt from operational-fit signals. Industry deprioritized."
 
-# Final score formula:
-# final_score = (icp_score * icp_weight) + (confidence_score * confidence_weight) + (intent_score * intent_weight)
+# ── Final score formula ──────────────────────────────────────────────────────
+# final_score = (icp_score * icp_weight) + (confidence_score * conf_weight) + (intent_score * intent_weight)
+# Phase 1 has no intent scoring yet — confidence carries that weight temporarily.
 final_score_weights:
-  icp: 0.40
-  confidence: 0.20
-  intent: 0.40
+  icp:        0.60
+  confidence: 0.40
+  intent:     0.00   # Phase 2: Buying Signal Agent
 
 # Lead category thresholds
 categories:
   hot:  75   # >= 75 → Hot
   warm: 40   # >= 40 → Warm (else Cold)
 
-# ICP sub-dimension weights (must sum to 1.0)
+# ── ICP dimensions (must total 100 points) ───────────────────────────────────
+
 icp_dimensions:
-  order_volume_fit:
-    weight: 0.25
-    description: "Monthly order volume 1,000–2,500 is ideal; 500–5,000 is secondary"
-    scoring:
-      ideal:     { min: 1000, max: 2500, score: 100 }
-      secondary: { min: 500,  max: 4999, score: 60  }
-      poor:      { score: 20 }
 
-  sku_count_fit:
-    weight: 0.20
-    description: "< 50 SKUs is ideal; < 200 is acceptable"
+  order_volume:
+    max_points: 30
+    description: >
+      Monthly order volume is the strongest signal. TFH's sweet spot is
+      1,000–5,000 orders/month. Can handle up to 20,000 with advance notice.
     scoring:
-      ideal:     { max: 50,  score: 100 }
-      secondary: { max: 200, score: 60  }
-      poor:      { score: 10 }
+      - { label: "1,000–5,000/mo",   score: 30 }
+      - { label: "5,001–10,000/mo",  score: 25 }
+      - { label: "10,001–20,000/mo", score: 15 }
+      - { label: "500–999/mo",       score: 15 }
+      - { label: "250–499/mo",       score: 10 }
+      - { label: "Under 250/mo",     score: 0  }
+    inference_signals:
+      - "Review count (high review count → higher volume proxy)"
+      - "Shopify Plus subscription (typically > 1,000/mo)"
+      - "Social following and engagement"
+      - "Estimated revenue vs. avg price → estimated orders"
 
-  product_category_fit:
-    weight: 0.20
-    description: "Books, merchandise, apparel, subscription are primary fits"
-    primary_categories:
-      - books
-      - merchandise
-      - apparel
-      - subscription
-      - gifts
-      - health_wellness
-    secondary_categories:
-      - pet_supplies
-      - beauty
-      - home_goods
+  shipping_profile:
+    max_points: 25
+    description: >
+      Second most important. TFH excels at small parcel pick/pack.
+      Products under 5 lbs that fit in a standard box are ideal.
+      Examples that score well: books, tennis accessories, vitamin patches,
+      dog treats, merchandise, bug strips, candles, apparel items.
     scoring:
-      primary:   100
-      secondary: 60
-      other:     20
+      under_5_lbs:          10   # avg product weight < 5 lbs (80 oz)
+      fits_standard_box:    10   # no oversized or freight items
+      easy_pick_pack:       5    # not fragile, not kitted, not pre-assembled
+    disqualifiers:
+      - "Oversized freight (furniture, exercise equipment)"
+      - "Perishable / refrigerated products"
+      - "Hazardous materials"
+      - "Very heavy items (> 20 lbs avg)"
 
-  geography:
-    weight: 0.15
-    description: "US-based sellers are the target market"
+  sku_complexity:
+    max_points: 20
+    description: >
+      Lower SKU counts mean simpler warehouse setup and fewer errors.
+      TFH has limited bin capacity — high SKU counts are operationally expensive.
     scoring:
-      us: 100
-      ca: 50
-      other: 10
+      - { label: "Under 50 SKUs",   score: 20 }
+      - { label: "50–100 SKUs",     score: 10 }
+      - { label: "101–150 SKUs",    score: 5  }
+      - { label: "Over 150 SKUs",   score: 0  }
 
-  platform:
-    weight: 0.10
-    description: "Platform signals likelihood of being a small-mid ecommerce seller"
+  fulfillment_simplicity:
+    max_points: 15
+    description: >
+      Standard ambient storage with no special handling requirements.
+      Each "yes" adds points.
     scoring:
-      shopify: 90
-      woocommerce: 85
-      tiktok_shop: 80
-      amazon: 50
-      other: 30
+      standard_storage:        5   # ambient temp, no climate control
+      no_refrigeration:        5   # not perishable
+      no_hazmat:               5   # not hazardous materials / dangerous goods
 
-  company_size:
-    weight: 0.10
-    description: "Not enterprise; ideally < 50 employees"
+  growth_signals:
+    max_points: 10
+    description: >
+      Signals that the company is growing and will need 3PL help soon.
+      Also signals they have budget and operational maturity.
     scoring:
-      micro:  { max: 10,   score: 100 }
-      small:  { max: 50,   score: 90  }
-      medium: { max: 200,  score: 50  }
-      large:  { score: 10 }
+      shopify_plus:            2   # detected in tech stack
+      tiktok_shop:             2   # TikTok selling active
+      active_meta_ads:         2   # Facebook/Instagram ads running
+      hiring_logistics:        2   # job postings for ops/logistics roles
+      recent_growth_funding:   2   # fundraise, press mention, or rapid review growth
+
+# ── Confidence score guide (for Claude) ─────────────────────────────────────
+confidence_guide:
+  90_100: "Order volume known, avg weight known, SKU count exact, US confirmed"
+  60_89:  "Most signals present; order volume inferred from reviews/revenue"
+  30_59:  "Limited data; significant inference from product type and price"
+  0_29:   "Almost no data; score is a rough guess"
+
+# ── Disqualifying flags (auto-score < 20) ───────────────────────────────────
+hard_disqualifiers:
+  - "Enterprise / Fortune 500"
+  - "International only (no US orders)"
+  - "Perishable food requiring refrigeration"
+  - "Hazmat / dangerous goods"
+  - "Oversized freight (beds, sofas, gym equipment)"
+  - "Pure digital / SaaS (no physical product)"
+  - "Over 500 SKUs"

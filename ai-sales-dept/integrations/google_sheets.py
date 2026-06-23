@@ -34,8 +34,9 @@ LEADS_HEADERS = [
     # Company intelligence
     "Industry", "Employee Count", "Tech Stack",
     "Company City", "Company State",
-    # Product / pipeline
-    "Product Count", "Status",
+    # Product / shipping profile (ICP signals)
+    "Product Count (SKUs)", "Avg Weight (oz)", "Avg Price", "Avg Rating", "Total Reviews",
+    "Country", "Status",
     # Scores
     "Quality Score", "Quality Flags",
     "ICP Score", "Confidence Score", "Category",
@@ -147,8 +148,13 @@ def _lead_to_row(lead: dict) -> list:
         lead.get("tech_stack", ""),
         lead.get("company_city", ""),
         lead.get("company_state", ""),
-        # Product / pipeline
+        # Product / shipping profile
         lead.get("product_count", ""),
+        lead.get("avg_product_weight_oz", ""),
+        lead.get("avg_product_price", ""),
+        lead.get("avg_rating", ""),
+        lead.get("total_reviews", ""),
+        lead.get("country_code") or lead.get("company_country", ""),
         lead.get("status", ""),
         # Scores
         lead.get("quality_score", ""),
